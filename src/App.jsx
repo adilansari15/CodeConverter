@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState} from "react";
 import {
   Code, Play, RotateCcw, Clipboard, Loader2,
   CheckCircle
@@ -9,33 +9,19 @@ import { dracula } from "@uiw/codemirror-theme-dracula";
 
 
 function App() {
-  const [aiReady, setAiReady] = useState(false);
   const [inputCode, setInputCode] = useState(
-    'functio helloWorld() {\n console.log("Hello, world!);\n}'
+   'function helloWorld() {\n  console.log("Hello, world!");\n}'
   );
   const [outputCode, setOutputCode] = useState("");
   const [targetLang, setTargetLang] = useState("Python");
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState("");
-  useEffect(() => {
-    const checkReady = setInterval(() => {
-      if (window.puter?.ai?.chat) {
-        setAiReady(true)
-        clearInterval(checkReady)
-      }
-    }, 300)
-    return () => clearInterval(checkReady)
-  }, []);
+
 
 
   const handleConvert = async () => {
     if (!inputCode.trim()) {
-      setFeedback("❌ Please enter some code to convert. ");
-      return;
-    }
-
-    if (!aiReady) {
-      setFeedback("❌ AI not ready, please wait for a few second. ");
+      setFeedback("❌ Please enter some code to convert.");
       return;
     }
 
@@ -44,31 +30,50 @@ function App() {
     setOutputCode("");
 
     try {
-      const res = await window.puter.ai.chat(
-        `
-        Convert the following code into 
-        ${targetLang}. Only return the converted code, no explanationas.
-        Code:
-        ${inputCode}
-        `
-      );
+     const prompt = `
+You are an expert software engineer.
 
-      const reply =
-        typeof res === "string"
-          ? res
-          : res?.message?.content ||
-          res?.message?.map((m) => m.content).join("\n") || "";
+Convert the following code to ${targetLang}.
 
-      if (!reply.trim()) throw new Error("Empty Response From Ai");
+Requirements:
+- Preserve all functionality.
+- Use idiomatic ${targetLang}.
+- Return ONLY source code.
+- No markdown fences.
+- No explanations.
+- No comments unless required.
+- Should Be Only Code
 
-      setOutputCode(reply.trim());
-      setFeedback("✅ Conversion Successfull!");
+SOURCE:
+
+${inputCode}
+`;
+
+      const response = await fetch("/api/convert", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Conversion failed");
+      }
+
+      setOutputCode(data.result.trim());
+      setFeedback("✅ Conversion Successful!");
+
     } catch (err) {
       console.error("Conversion error:", err);
       setFeedback(`❌ Error: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   const handleReset = () => {
@@ -106,7 +111,7 @@ function App() {
 
 
         <button onClick={handleConvert}
-          disabled={!aiReady || loading}
+          disabled={loading}
           className="px-6
         py-3 bg-gradient-to-r from-violet-500 to-cyan-500 hover:opacity-80 active:scale-95 text-white font-semibold rounded-2xl transition-all flex items-center gap-2 disabled:opacity-50 shadow-lg cursor-pointer"
         >
@@ -115,8 +120,7 @@ function App() {
           ) : (
             <Play className="w-5 h-5" />
           )}
-          {loading ? "Converting....." : "Converted"}
-        </button>
+          {loading ? "Converting..." : "Convert"}         </button>
 
         <button
           onClick={handleReset}
@@ -126,7 +130,7 @@ function App() {
           <RotateCcw className=" w-5 h-5" /> Reset
         </button>
       </div>
-      <div className="grid grid-col-1 lg:grid-cols-2 gap-8 w-full max-w-7xl relative z-10">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 w-full max-w-7xl relative z-10">
         {/* input box */}
         <div className="bg-slate-900/80 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-md">
           <div className="bg-slate-800/80 px-4 py-3 border-b border-slate-700 flex items-center gap-2">
@@ -170,16 +174,14 @@ function App() {
       {feedback && (
         <p
           className={`text-center font-semibold drop-shadow-md relative z-10 ${feedback.includes("✅") || feedback.includes("📋")
-              ? "text-emerald-400"
-              : "text-red-400"
+            ? "text-emerald-400"
+            : "text-red-400"
             }`}
         >
           {feedback}
         </p>
       )}
-      {!aiReady && 
-      <p className=" text-sm text-slate-400 relative z-10"
-      >Initializing AI...... Please Wait</p>}
+     
     </div>
   );
 }
